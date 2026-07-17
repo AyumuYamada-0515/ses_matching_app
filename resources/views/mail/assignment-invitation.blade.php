@@ -1,0 +1,1 @@
+<p>{{ $invitation->engineer->name ?? 'SE' }} 様</p><p>{{ $invitation->salesRepresentative->name }}さんから担当営業の勧誘が届きました。</p><p>SES Matchへログインし、「担当勧誘」画面から承諾または拒否を選択してください。</p><p><a href="{{ route('engineer.assignment-invitations.index') }}">担当勧誘を確認する</a></p>
