@@ -22,13 +22,21 @@ class AssignmentInvitationController extends Controller
     {
         abort_unless($engineer->isEngineer(), 422, 'SEを選択してください。');
         abort_if($engineer->salesRepresentatives()->whereKey(auth()->id())->exists(), 422, 'このSEは既にあなたの担当です。');
-        $existing = AssignmentInvitation::where('sales_user_id', auth()->id())->where('engineer_id', $engineer->id)->first();
-        if ($existing?->status === AssignmentInvitationStatus::Pending) {
-            return back()->withErrors(['invitation' => 'このSEには送信済みです。']);
-        }
-        $invitation = AssignmentInvitation::updateOrCreate(['sales_user_id' => auth()->id(), 'engineer_id' => $engineer->id], ['status' => AssignmentInvitationStatus::Pending, 'responded_at' => null]);
-        Mail::to($engineer)->send(new AssignmentInvitationMail($invitation));
 
-        return back()->with('success', '担当勧誘メールを送信しました。');
+        $attributes = ['sales_user_id' => auth()->id(), 'engineer_id' => $engineer->id];
+        $existing = AssignmentInvitation::query()->where($attributes)->first();
+        $isResend = $existing?->status === AssignmentInvitationStatus::Pending;
+
+        $invitation = AssignmentInvitation::updateOrCreate(
+            $attributes,
+            ['status' => AssignmentInvitationStatus::Pending, 'responded_at' => null],
+        );
+
+        Mail::to($engineer)->queue(new AssignmentInvitationMail($invitation));
+
+        return back()->with(
+            'success',
+            $isResend ? '担当勧誘メールを再送キューに登録しました。' : '担当勧誘メールを送信キューに登録しました。',
+        );
     }
 }

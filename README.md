@@ -323,6 +323,12 @@ railway link
 railway up --service web --ci
 ```
 
+DBキューを使用するため、Webサービスとは別に同じリポジトリ・環境変数を使うRailwayワーカーサービスを作成し、次の起動コマンドを設定します。
+
+    php artisan queue:work --sleep=3 --tries=3 --backoff=60 --timeout=60
+
+ワーカーを起動しない場合、jobsテーブルに登録された招待メールは配信されません。失敗したメールは最大3回再試行され、最終的な失敗はfailed_jobsテーブルで確認できます。
+
 デプロイ後は次を確認します。
 
 1. Railwayのデプロイ状態が `SUCCESS`
