@@ -29,6 +29,7 @@ class Project extends Model
 
     public function isAcceptingApplications(): bool
     {
-        return $this->status === ProjectStatus::Open && ! $this->application_deadline->isPast();
+        return $this->status === ProjectStatus::Open
+            && $this->application_deadline->greaterThanOrEqualTo(today());
     }
 }

@@ -7,6 +7,7 @@ use App\Enums\UserRole;
 use App\Mail\AssignmentInvitationMail;
 use App\Models\AssignmentInvitation;
 use App\Models\User;
+use Illuminate\Contracts\Queue\ShouldQueueAfterCommit;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Mail;
 use Tests\TestCase;
@@ -57,8 +58,38 @@ class RegistrationAndAssignmentInvitationTest extends TestCase
         $managedByAnother = $this->engineer($otherSales);
         $this->actingAs($sales)->get(route('sales.assignment-invitations.index'))->assertOk()->assertSee($candidate->name)->assertSee($managedByAnother->name)->assertDontSee($ownEngineer->name);
         $this->post(route('sales.assignment-invitations.store', $managedByAnother))->assertSessionHas('success');
-        Mail::assertSent(AssignmentInvitationMail::class, fn ($mail) => $mail->hasTo($managedByAnother->email));
+        Mail::assertQueued(AssignmentInvitationMail::class, function (AssignmentInvitationMail $mail) use ($managedByAnother) {
+            $this->assertInstanceOf(ShouldQueueAfterCommit::class, $mail);
+            $this->assertSame(3, $mail->tries);
+            $this->assertSame([60, 300, 900], $mail->backoff);
+
+            return $mail->hasTo($managedByAnother->email);
+        });
         $this->post(route('sales.assignment-invitations.store', $ownEngineer))->assertStatus(422);
+    }
+
+    public function test_pending_invitation_can_be_queued_again(): void
+    {
+        Mail::fake();
+        $sales = $this->sales();
+        $engineer = $this->engineer();
+        $invitation = AssignmentInvitation::create([
+            'sales_user_id' => $sales->id,
+            'engineer_id' => $engineer->id,
+            'status' => AssignmentInvitationStatus::Pending,
+        ]);
+
+        $this->actingAs($sales)
+            ->get(route('sales.assignment-invitations.index'))
+            ->assertOk()
+            ->assertSee('勧誘メールを再送する');
+
+        $this->post(route('sales.assignment-invitations.store', $engineer))
+            ->assertSessionHas('success', '担当勧誘メールを再送キューに登録しました。');
+
+        Mail::assertQueuedCount(1);
+        $this->assertDatabaseCount('assignment_invitations', 1);
+        $this->assertSame(AssignmentInvitationStatus::Pending, $invitation->fresh()->status);
     }
 
     public function test_engineer_can_accept_multiple_sales_invitations(): void

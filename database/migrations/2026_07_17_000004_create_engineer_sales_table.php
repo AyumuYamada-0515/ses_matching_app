@@ -26,11 +26,24 @@ return new class extends Migration
 
     public function down(): void
     {
+        $hasMultipleAssignments = DB::table('engineer_sales')
+            ->select('engineer_id')
+            ->groupBy('engineer_id')
+            ->havingRaw('COUNT(*) > 1')
+            ->exists();
+
+        if ($hasMultipleAssignments) {
+            throw new RuntimeException(
+                'engineer_sales contains engineers assigned to multiple sales representatives. '
+                .'Rolling back would discard assignments, so the migration was stopped.',
+            );
+        }
+
         Schema::table('users', function (Blueprint $table) {
             $table->foreignId('sales_user_id')->nullable()->constrained('users')->nullOnDelete();
         });
         DB::table('engineer_sales')->orderBy('id')->get()->each(function ($assignment) {
-            DB::table('users')->where('id', $assignment->engineer_id)->whereNull('sales_user_id')->update(['sales_user_id' => $assignment->sales_user_id]);
+            DB::table('users')->where('id', $assignment->engineer_id)->update(['sales_user_id' => $assignment->sales_user_id]);
         });
         Schema::dropIfExists('engineer_sales');
     }
