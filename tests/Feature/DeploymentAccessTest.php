@@ -2,6 +2,8 @@
 
 namespace Tests\Feature;
 
+use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Route;
 use Tests\TestCase;
 
 class DeploymentAccessTest extends TestCase
@@ -34,5 +36,20 @@ class DeploymentAccessTest extends TestCase
         config(['deployment_access.username' => 'preview', 'deployment_access.password' => 'secret']);
 
         $this->get('/up')->assertOk();
+    }
+    public function test_forwarded_https_scheme_is_trusted_for_cloud_deployments(): void
+    {
+        Route::get('/proxy-check', fn (Request $request) => [
+            'secure' => $request->isSecure(),
+            'login_url' => route('login'),
+        ]);
+
+        $this->withHeaders([
+            'X-Forwarded-Proto' => 'https',
+            'X-Forwarded-Host' => 'preview.example',
+        ])->get('/proxy-check')->assertOk()->assertJson([
+            'secure' => true,
+            'login_url' => 'https://preview.example/login',
+        ]);
     }
 }
